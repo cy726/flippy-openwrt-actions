@@ -17,11 +17,13 @@ on:
         type: choice
         options:
           - all
-          - beikeyun_l1pro_r66s_r68s_h68k_e25
+          - qemu_vplus_beikeyun_l1pro_rock5b_h88k_r66s_r68s_h68k_e25
           - s922x_s922x-n2_s905x3_s905x2_s912_s905d_s905
           - vplus
           - beikeyun
           - l1pro
+          - rock5b
+          - h88k
           - r66s
           - r68s
           - h68k
@@ -72,7 +74,9 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc 2>/dev/null
+          docker rmi `docker images -q`
+          sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/apt/sources.list.d /usr/local/lib/android 2>/dev/null
+          sudo -E apt-get -y purge azure-cli ghc* zulu* hhvm llvm* firefox google* dotnet* powershell openjdk* adoptopenjdk* mysql* php* mongodb* dotnet* moby* snapd* || true
           sudo -E apt-get -qq update
           sudo -E apt-get -qq install $(curl -fsSL https://is.gd/depend_ubuntu2204_openwrt)
           sudo -E apt-get -qq autoremove --purge
