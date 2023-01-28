@@ -28,14 +28,17 @@ PACKAGE_FILE="openwrt-armvirt-64-default-rootfs.tar.gz"
 # Set the list of supported device
 PACKAGE_OPENWRT=(
     "rock5b" "h88k"
+    "r66s" "r68s" "h66k" "h68k" "e25"
+    "beikeyun" "l1pro"
     "vplus"
-    "beikeyun" "l1pro" "r66s" "r68s" "h68k" "e25"
     "s922x" "s922x-n2" "s905x3" "s905x2" "s912" "s905d" "s905"
     "qemu"
     "diy"
 )
 # Set the list of devices using the [ rk3588 ] kernel
 PACKAGE_OPENWRT_RK3588=("rock5b" "h88k")
+# Set the list of devices using the [ 6.0.y and above ] kernel
+PACKAGE_OPENWRT_KERNEL6=("r66s" "r68s" "h66k" "h68k" "e25")
 # All are packaged by default, and independent settings are supported, such as: [ s905x3_s905d_rock5b ]
 PACKAGE_SOC_VALUE="all"
 
@@ -59,6 +62,7 @@ SCRIPT_BEIKEYUN_FILE="mk_rk3328_beikeyun.sh"
 SCRIPT_L1PRO_FILE="mk_rk3328_l1pro.sh"
 SCRIPT_R66S_FILE="mk_rk3568_r66s.sh"
 SCRIPT_R68S_FILE="mk_rk3568_r68s.sh"
+SCRIPT_H66K_FILE="mk_rk3568_h66k.sh"
 SCRIPT_H68K_FILE="mk_rk3568_h68k.sh"
 SCRIPT_E25_FILE="mk_rk3568_e25.sh"
 SCRIPT_ROCK5B_FILE="mk_rk3588_rock5b.sh"
@@ -85,17 +89,12 @@ DISTRIB_REVISION_VALUE="R$(date +%Y.%m.%d)"
 DISTRIB_DESCRIPTION_VALUE="OpenWrt"
 
 # Set font color
-blue_font_prefix="\033[94m"
-purple_font_prefix="\033[95m"
-green_font_prefix="\033[92m"
-yellow_font_prefix="\033[93m"
-red_font_prefix="\033[91m"
-font_color_suffix="\033[0m"
-INFO="[${blue_font_prefix}INFO${font_color_suffix}]"
-STEPS="[${purple_font_prefix}STEPS${font_color_suffix}]"
-SUCCESS="[${green_font_prefix}SUCCESS${font_color_suffix}]"
-WARNING="[${yellow_font_prefix}WARNING${font_color_suffix}]"
-ERROR="[${red_font_prefix}ERROR${font_color_suffix}]"
+STEPS="[\033[95m STEPS \033[0m]"
+INFO="[\033[94m INFO \033[0m]"
+SUCCESS="[\033[92m SUCCESS \033[0m]"
+PROMPT="[\033[93m PROMPT \033[0m]"
+WARNING="[\033[93m WARNING \033[0m]"
+ERROR="[\033[91m ERROR \033[0m]"
 #
 #==============================================================================================
 
@@ -108,7 +107,7 @@ init_var() {
     echo -e "${STEPS} Start Initializing Variables..."
 
     # Install the compressed package
-    sudo apt-get -qq update && sudo apt-get -qq install -y p7zip p7zip-full zip unzip gzip xz-utils pigz zstd subversion git
+    sudo apt-get -qq update && sudo apt-get -qq install -y curl wget subversion git p7zip p7zip-full zip unzip gzip xz-utils pigz zstd
 
     # Specify the default value
     [[ -n "${SCRIPT_REPO_URL}" ]] || SCRIPT_REPO_URL="${SCRIPT_REPO_URL_VALUE}"
@@ -122,6 +121,7 @@ init_var() {
     [[ -n "${SELECT_PACKITPATH}" ]] || SELECT_PACKITPATH="${SELECT_PACKITPATH_VALUE}"
     [[ -n "${SELECT_OUTPUTPATH}" ]] || SELECT_OUTPUTPATH="${SELECT_OUTPUTPATH_VALUE}"
     [[ -n "${SAVE_OPENWRT_ARMVIRT}" ]] || SAVE_OPENWRT_ARMVIRT="${SAVE_OPENWRT_ARMVIRT_VALUE}"
+    [[ -n "${GH_TOKEN}" ]] && GH_TOKEN="${GH_TOKEN}" || GH_TOKEN=""
 
     # Specify the default packaging script
     [[ -n "${SCRIPT_VPLUS}" ]] || SCRIPT_VPLUS="${SCRIPT_VPLUS_FILE}"
@@ -129,6 +129,7 @@ init_var() {
     [[ -n "${SCRIPT_L1PRO}" ]] || SCRIPT_L1PRO="${SCRIPT_L1PRO_FILE}"
     [[ -n "${SCRIPT_R66S}" ]] || SCRIPT_R66S="${SCRIPT_R66S_FILE}"
     [[ -n "${SCRIPT_R68S}" ]] || SCRIPT_R68S="${SCRIPT_R68S_FILE}"
+    [[ -n "${SCRIPT_H66K}" ]] || SCRIPT_H66K="${SCRIPT_H66K_FILE}"
     [[ -n "${SCRIPT_H68K}" ]] || SCRIPT_H68K="${SCRIPT_H68K_FILE}"
     [[ -n "${SCRIPT_E25}" ]] || SCRIPT_E25="${SCRIPT_E25_FILE}"
     [[ -n "${SCRIPT_ROCK5B}" ]] || SCRIPT_ROCK5B="${SCRIPT_ROCK5B_FILE}"
@@ -174,15 +175,7 @@ init_var() {
     }
 
     # KERNEL_REPO_URL URL format conversion to support svn co
-    [[ -n "$(echo ${KERNEL_REPO_URL} | grep "tree")" ]] && {
-        # Left part
-        KERNEL_REPO_URL_LEFT="${KERNEL_REPO_URL%\/tree*}"
-        # Right part
-        KERNEL_REPO_URL_RIGHT="${KERNEL_REPO_URL#*tree\/}"
-        KERNEL_REPO_URL_RIGHT="${KERNEL_REPO_URL_RIGHT#*\/}"
-        KERNEL_REPO_URL="${KERNEL_REPO_URL_LEFT}/trunk/${KERNEL_REPO_URL_RIGHT}"
-    }
-
+    KERNEL_REPO_URL="${KERNEL_REPO_URL//tree\/main/trunk}"
     # Remove [ /kernel ] for breakings kernel repository
     [[ "${KERNEL_REPO_URL,,}" == *"github.com/breakings/openwrt/"* ]] && {
         KERNEL_REPO_URL="${KERNEL_REPO_URL//opt\/kernel/opt}"
@@ -261,15 +254,26 @@ auto_kernel() {
             i=1
             for KERNEL_VAR in ${down_kernel_list[*]}; do
                 echo -e "${INFO} (${i}) Auto query the latest kernel version of the same series for [ ${vb} - ${KERNEL_VAR} ]"
+
+                # Identify the kernel mainline
                 MAIN_LINE="$(echo ${KERNEL_VAR} | awk -F '.' '{print $1"."$2}')"
+
                 # Check the version on the server (e.g LATEST_VERSION="125")
-                LATEST_VERSION="$(curl -s "${SERVER_KERNEL_URL}/${vb}" | grep "name" | grep -oE "${MAIN_LINE}.[0-9]+" | sed -e "s/${MAIN_LINE}.//g" | sort -n | sed -n '$p')"
+                if [[ -n "${GH_TOKEN}" ]]; then
+                    LATEST_VERSION="$(curl --header "authorization: Bearer ${GH_TOKEN}" -s "${SERVER_KERNEL_URL}/${vb}" | grep "name" | grep -oE "${MAIN_LINE}.[0-9]+" | sed -e "s/${MAIN_LINE}.//g" | sort -n | sed -n '$p')"
+                    query_api="Authenticated user request"
+                else
+                    LATEST_VERSION="$(curl -s "${SERVER_KERNEL_URL}/${vb}" | grep "name" | grep -oE "${MAIN_LINE}.[0-9]+" | sed -e "s/${MAIN_LINE}.//g" | sort -n | sed -n '$p')"
+                    query_api="Unauthenticated user request"
+                fi
+
                 if [[ "$?" -eq "0" && -n "${LATEST_VERSION}" ]]; then
                     TMP_ARR_KERNELS[${i}]="${MAIN_LINE}.${LATEST_VERSION}"
                 else
                     TMP_ARR_KERNELS[${i}]="${KERNEL_VAR}"
                 fi
-                echo -e "${INFO} (${i}) [ ${vb} - ${TMP_ARR_KERNELS[$i]} ] is latest kernel."
+
+                echo -e "${INFO} (${i}) [ ${vb} - ${TMP_ARR_KERNELS[$i]} ] is latest kernel (${query_api})."
 
                 let i++
             done
@@ -347,6 +351,20 @@ make_openwrt() {
             k="1"
             for KERNEL_VAR in ${build_kernel[*]}; do
                 {
+                   # Rockchip rk3568 series only support 6.0.y and above kernel
+                    [[ -n "$(echo "${PACKAGE_OPENWRT_KERNEL6[@]}" | grep -w "${PACKAGE_VAR}")" && "${KERNEL_VAR:0:1}" -ne "6" ]] && {
+                        echo -e "${STEPS} (${i}.${k}) ${PROMPT} ${PACKAGE_VAR} cannot use ${KERNEL_VAR} kernel, skip."
+                        let k++
+                        continue
+                    }
+
+                    # Check the available size of server space
+                    now_remaining_space="$(df -Tk ${PWD} | grep '/dev/' | awk '{print $5}' | echo $(($(xargs) / 1024 / 1024)))"
+                    [[ "${now_remaining_space}" -le "3" ]] && {
+                        echo -e "${WARNING} If the remaining space is less than 3G, exit this packaging. \n"
+                        break
+                    }
+
                     cd /opt/kernel
 
                     # Copy the kernel to the packaging directory
@@ -358,11 +376,12 @@ make_openwrt() {
                     boot_kernel_file="${boot_kernel_file//.tar.gz/}"
                     [[ "${vb}" == "rk3588" ]] && rk3588_file="${boot_kernel_file}" || rk3588_file=""
                     echo -e "${STEPS} (${i}.${k}) Start packaging OpenWrt: [ ${PACKAGE_VAR} ], Kernel directory: [ ${vb} ], Kernel name: [ ${boot_kernel_file} ]"
+                    echo -e "${INFO} Remaining space is ${now_remaining_space}G. \n"
 
                     cd /opt/${SELECT_PACKITPATH}
 
                     # If flowoffload is turned on, then sfe is forced to be closed by default
-                    [[ "${SW_FLOWOFFLOAD}" -eq "1" ]] && SFE_FLOW=0
+                    [[ "${SW_FLOWOFFLOAD}" -eq "1" ]] && SFE_FLOW="0"
 
                     if [[ -n "${OPENWRT_VER}" && "${OPENWRT_VER}" == "auto" ]]; then
                         OPENWRT_VER="$(cat make.env | grep "OPENWRT_VER=\"" | cut -d '"' -f2)"
@@ -389,15 +408,6 @@ EOF
                     echo -e "${INFO} make.env file info:"
                     cat make.env
 
-                    # Check the available size of server space
-                    now_remaining_space="$(df -Tk ${PWD} | grep '/dev/' | awk '{print $5}' | echo $(($(xargs) / 1024 / 1024)))"
-                    if [[ "${now_remaining_space}" -le "3" ]]; then
-                        echo -e "${WARNING} If the remaining space is less than 3G, exit this packaging. \n"
-                        break 2
-                    else
-                        echo -e "${INFO} Remaining space is ${now_remaining_space}G. \n"
-                    fi
-
                     # Select the corresponding packaging script
                     case "${PACKAGE_VAR}" in
                         vplus)    [[ -f "${SCRIPT_VPLUS}" ]] && sudo ./${SCRIPT_VPLUS} ;;
@@ -405,6 +415,7 @@ EOF
                         l1pro)    [[ -f "${SCRIPT_L1PRO}" ]] && sudo ./${SCRIPT_L1PRO} ;;
                         r66s)     [[ -f "${SCRIPT_R66S}" ]] && sudo ./${SCRIPT_R66S} ;;
                         r68s)     [[ -f "${SCRIPT_R68S}" ]] && sudo ./${SCRIPT_R68S} ;;
+                        h66k)     [[ -f "${SCRIPT_H66K}" ]] && sudo ./${SCRIPT_H66K} ;;
                         h68k)     [[ -f "${SCRIPT_H68K}" ]] && sudo ./${SCRIPT_H68K} ;;
                         rock5b)   [[ -f "${SCRIPT_ROCK5B}" ]] && sudo ./${SCRIPT_ROCK5B} ;;
                         h88k)     [[ -f "${SCRIPT_H88K}" ]] && sudo ./${SCRIPT_H88K} ;;
@@ -418,8 +429,7 @@ EOF
                         s922x-n2) [[ -f "${SCRIPT_S922X_N2}" ]] && sudo ./${SCRIPT_S922X_N2} ;;
                         qemu)     [[ -f "${SCRIPT_QEMU}" ]] && sudo ./${SCRIPT_QEMU} ;;
                         diy)      [[ -f "${SCRIPT_DIY}" ]] && sudo ./${SCRIPT_DIY} ;;
-                        *)        echo -e "${WARNING} Have no this SoC. Skipped."
-                                  continue ;;
+                        *)        echo -e "${WARNING} Have no this SoC. Skipped." && continue ;;
                     esac
 
                     # Generate compressed file
@@ -430,7 +440,7 @@ EOF
                         zip | .zip)    ls *.img | head -n 1 | xargs -I % sh -c 'zip %.zip %; rm -f %' ;;
                         zst | .zst)    zstd --rm *.img ;;
                         xz | .xz)      xz -z *.img ;;
-                        gz | .gz | *)  pigz -9f *.img ;;
+                        gz | .gz | *)  pigz -f *.img ;;
                     esac
 
                     echo -e "${SUCCESS} (${i}.${k}) OpenWrt packaging succeeded: [ ${PACKAGE_VAR} - ${vb} - ${KERNEL_VAR} ] \n"
@@ -461,9 +471,9 @@ out_github_env() {
         # Generate sha256sum check file
         sha256sum * >sha256sums && sync
 
-        echo "PACKAGED_OUTPUTPATH=${PWD}" >>$GITHUB_ENV
-        echo "PACKAGED_OUTPUTDATE=$(date +"%m.%d.%H%M")" >>$GITHUB_ENV
-        echo "PACKAGED_STATUS=success" >>$GITHUB_ENV
+        echo "PACKAGED_OUTPUTPATH=${PWD}" >>${GITHUB_ENV}
+        echo "PACKAGED_OUTPUTDATE=$(date +"%m.%d.%H%M")" >>${GITHUB_ENV}
+        echo "PACKAGED_STATUS=success" >>${GITHUB_ENV}
         echo -e "PACKAGED_OUTPUTPATH: ${PWD}"
         echo -e "PACKAGED_OUTPUTDATE: $(date +"%m.%d.%H%M")"
         echo -e "PACKAGED_STATUS: success"
@@ -471,7 +481,7 @@ out_github_env() {
         echo -e "$(ls /opt/${SELECT_PACKITPATH}/${SELECT_OUTPUTPATH} 2>/dev/null) \n"
     else
         echo -e "${ERROR} Packaging failed. \n"
-        echo "PACKAGED_STATUS=failure" >>$GITHUB_ENV
+        echo "PACKAGED_STATUS=failure" >>${GITHUB_ENV}
     fi
 }
 

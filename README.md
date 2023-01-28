@@ -1,10 +1,10 @@
-# Flippy's OpenWrt packaging script Actions
+# Function description
 
 View Chinese description  |  [查看中文说明](README.cn.md)
 
-The packaging scripts of the [Flippy repository](https://github.com/unifreq/openwrt_packit) are completely used, without any script modification, and only intelligent Action application development is carried out, making the packaging operation easier and more personalized.
+[unifreq/openwrt_packit](https://github.com/unifreq/openwrt_packit) is an OpenWrt packaging script repository developed by `Flippy`. Support Allwinner (V-Plus Cloud), and Rockchip (BeikeYun, Chainedbox L1 Pro, FastRhino R66S, FastRhino R68S, HinLink H88K/H68K, Radxa 5b/E25), and Amlogic S9xxx boxes are S905x3, S905x2, S922x, S905x, S905d, S905, S912, etc.
 
-Support Allwinner (V-Plus Cloud), and Rockchip (BeikeYun, Chainedbox L1 Pro, FastRhino R66S, FastRhino R68S, HinLink H88K/H68K, Radxa 5b/E25), and Amlogic S9xxx boxes are S905x3, S905x2, S922x, S905x, S905d, S905, S912, etc.
+This Action uses his packaging script, without any modification, and only carries out intelligent action application development, making the github Actions packaging easier and more personalized.
 
 ## Instructions
 
@@ -17,6 +17,7 @@ Introduce this Actions in the `.github/workflows/*.yml` cloud compilation script
     OPENWRT_ARMVIRT: openwrt/bin/targets/*/*/*.tar.gz
     PACKAGE_SOC: all
     KERNEL_VERSION_NAME: 6.0.1_5.15.50
+    GH_TOKEN: ${{ secrets.GH_TOKEN }}
 ```
 
 ## Optional parameter description
@@ -25,10 +26,10 @@ According to the latest kernel packaging script released by `Flippy`, optional p
 
 | parameter              | Defaults               | Description                                                   |
 |------------------------|------------------------|---------------------------------------------------------------|
-| OPENWRT_ARMVIRT_PATH   | no                     | required. Set the file path of `openwrt-armvirt-64-default-rootfs.tar.gz` , you can use a relative path such as `openwrt/bin/targets/*/*/*.tar.gz` or the network file download address. E.g `https://github.com/*/releases/*/*.tar.gz` . |
-| SCRIPT_REPO_URL        | [unifreq/openwrt_packit](https://github.com/ophub/flippy-openwrt-actions/blob/main/openwrt_flippy.sh#L22) | Set up the packaging script source code repository. You can fill in the full URL of `github` such as `https://github.com/unifreq/openwrt_packit` or repository/project abbreviation such as `unifreq/openwrt_packit` |
+| OPENWRT_ARMVIRT_PATH   | None                   | required. Set the file path of `openwrt-armvirt-64-default-rootfs.tar.gz` , you can use a relative path such as `openwrt/bin/targets/*/*/*.tar.gz` or the network file download address. E.g `https://github.com/*/releases/*/*.tar.gz` . |
+| SCRIPT_REPO_URL        | [unifreq/openwrt_packit](https://github.com/ophub/flippy-openwrt-actions/blob/main/openwrt_flippy.sh#L22) | Set up the packaging script source code repository. You can fill in the full URL of `github` such as `https://github.com/unifreq/openwrt_packit` or `<owner>/<repo>` abbreviation such as `unifreq/openwrt_packit` |
 | SCRIPT_REPO_BRANCH     | master                 | Set the branch of the packaged script source code repository. |
-| KERNEL_REPO_URL        | [breakings/.../opt](https://github.com/ophub/flippy-openwrt-actions/blob/main/openwrt_flippy.sh#L43) | Set the kernel download address, Used by default from [kernel repository](https://github.com/breakings/OpenWrt/tree/main/opt) maintained by breakings. |
+| KERNEL_REPO_URL        | [breakings/.../opt](https://github.com/ophub/flippy-openwrt-actions/blob/main/openwrt_flippy.sh#L46) | Set the kernel download address, Used by default from [kernel repository](https://github.com/breakings/OpenWrt/tree/main/opt) maintained by breakings. |
 | KERNEL_VERSION_DIR     | kernel_rk3588          | Set the kernel download directory. Common-kernel-directory_RK3588-kernel-directory |
 | KERNEL_VERSION_NAME    | 6.0.1_5.15.50       | Set the [kernel version](https://github.com/breakings/OpenWrt/tree/main/opt/kernel)，you can view and choose to specify. you can specify a single kernel such as `6.0.1`, you can choose multiple kernel to use `_` connection such as `6.0.1_5.15.50` . The name of the kernel is subject to the folder name in the kernel directory. |
 | KERNEL_AUTO_LATEST     | true                   | Set whether to automatically adopt the latest version of the kernel of the same series. When it is `true`, it will automatically find in the kernel library whether there is an updated version of the kernel specified in `KERNEL_VERSION_NAME` such as 6.0.1. If there is the latest version of same series, it will automatically Replace with the latest version. When set to `false`, the specified version of the kernel will be compiled. |
@@ -43,6 +44,7 @@ According to the latest kernel packaging script released by `Flippy`, optional p
 | SCRIPT_H88K            | mk_rk3588_h88k.sh      | Set the script file name for packaging `rk3588 h88k` |
 | SCRIPT_R66S            | mk_rk3568_r66s.sh      | Set the script file name for packaging `rk3568 r66s` |
 | SCRIPT_R68S            | mk_rk3568_r68s.sh      | Set the script file name for packaging `rk3568 r68s` |
+| SCRIPT_H66K            | mk_rk3568_h66k.sh      | Set the script file name for packaging `rk3568 h66k` |
 | SCRIPT_H68K            | mk_rk3568_h68k.sh      | Set the script file name for packaging `rk3568 h68k` |
 | SCRIPT_E25             | mk_rk3568_e25.sh       | Set the script file name for packaging `rk3568 e25`  |
 | SCRIPT_S905            | mk_s905_mxqpro+.sh     | Set the script file name for packaging `s905 mxqpro+` |
@@ -63,12 +65,13 @@ According to the latest kernel packaging script released by `Flippy`, optional p
 | ENABLE_WIFI_K510       | 1                      | Set the value of the `ENABLE_WIFI_K510` parameter in `make.env` |
 | DISTRIB_REVISION       | R$(date +%m.%d)        | Set the value of the `DISTRIB_REVISION` parameter in `make.env` |
 | DISTRIB_DESCRIPTION    | OpenWrt                | Set the value of the `DISTRIB_DESCRIPTION` parameter in `make.env` |
+| GH_TOKEN               | None                   | Optional. Set ${{ secrets.GH_TOKEN }} for [api.github.com](https://docs.github.com/en/rest/overview/resources-in-the-rest-api?apiVersion=2022-11-28#requests-from-personal-accounts) query. |
 
 💡 Normally, you can use the default parameters, but you can also configure them according to your needs. For example, after Flippy renamed the packaging script, the original default script file cannot be found, and the firmware version number in make.env has not been updated. You can use optional parameters for real-time designation and personalized configuration.
 
 ## Output parameter description
 
-According to the standard of github.com, 3 environment variables are output to facilitate the subsequent use of the compilation step. Since github.com has recently modified the settings of the fork repository, the read and write permissions of Workflow are disabled by default, so uploading to `Releases` requires adding `GITHUB_TOKEN` and `GH_TOKEN` to the repository and setting `Workflow read and write permissions`, see the [instructions for details](https://github.com/ophub/amlogic-s9xxx-openwrt/blob/main/router-config/README.md#2-set-the-privacy-variable-github_token).
+According to the standard of github.com, 3 environment variables are output to facilitate the subsequent use of the compilation step. Since github.com has recently modified the settings of the fork repository, the read and write permissions of Workflow are disabled by default, so uploading to `Releases` requires adding `${{ secrets.GITHUB_TOKEN }}` and `${{ secrets.GH_TOKEN }}` to the repository and setting `Workflow read and write permissions`, see the [instructions for details](https://github.com/ophub/amlogic-s9xxx-openwrt/blob/main/router-config/README.md#2-set-the-privacy-variable-github_token).
 
 | parameter                                | For example                | Description                   |
 |------------------------------------------|----------------------------|-------------------------------|

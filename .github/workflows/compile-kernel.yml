@@ -10,8 +10,8 @@ on:
   repository_dispatch:
   workflow_dispatch:
     inputs:
-      kernel_repo:
-        description: "Select the kernel repository"
+      kernel_source:
+        description: "Select the kernel source"
         required: false
         default: "unifreq"
         type: choice
@@ -21,17 +21,17 @@ on:
       kernel_version:
         description: "Select kernel version"
         required: false
-        default: "5.15.50_6.0.1"
+        default: "5.15.85_6.1.1"
         type: choice
         options:
-          - 5.4.210_5.10.135_5.15.50
-          - 5.4.210_5.10.135
-          - 5.10.135_5.15.50
-          - 5.15.50_6.0.1
-          - 5.4.210
-          - 5.10.135
-          - 5.15.50
-          - 6.0.1
+          - 5.4.225_5.10.160_5.15.85
+          - 5.4.225_5.10.160
+          - 5.10.160_5.15.85
+          - 5.15.85_6.1.1
+          - 5.4.225
+          - 5.10.160
+          - 5.15.85
+          - 6.1.1
       kernel_auto:
         description: "Auto use the latest kernel"
         required: false
@@ -71,8 +71,11 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc 2>/dev/null
-          sudo -E apt-get -qq update
+          docker rmi `docker images -q`
+          sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android 2>/dev/null
+          sudo -E apt-get -y purge azure-cli ghc* zulu* hhvm llvm* firefox google* dotnet* powershell openjdk* adoptopenjdk* mongodb* dotnet* moby* snapd* || true
+          sudo -E apt-get -qq update -y
+          sudo -E apt-get -qq full-upgrade -y
           sudo -E apt-get -qq install -y $(curl -fsSL https://is.gd/depend_ubuntu2204_armbian)
           sudo -E apt-get -qq autoremove --purge
           sudo -E apt-get -qq clean
@@ -84,12 +87,12 @@ jobs:
         if: ${{ steps.init.outputs.status }} == 'success' && !cancelled()
         with:
           build_target: kernel
-          kernel_repo: ${{ github.event.inputs.kernel_repo }}
-          kernel_version: ${{ github.event.inputs.kernel_version }}
-          kernel_auto: ${{ github.event.inputs.kernel_auto }}
-          kernel_package: ${{ github.event.inputs.kernel_package }}
-          kernel_sign: ${{ github.event.inputs.kernel_sign }}
-          kernel_config: ${{ github.event.inputs.kernel_config }}
+          kernel_source: ${{ inputs.kernel_source }}
+          kernel_version: ${{ inputs.kernel_version }}
+          kernel_auto: ${{ inputs.kernel_auto }}
+          kernel_package: ${{ inputs.kernel_package }}
+          kernel_sign: ${{ inputs.kernel_sign }}
+          kernel_config: ${{ inputs.kernel_config }}
 
       - name: Upload Kernel to Release
         uses: ncipollo/release-action@main
@@ -101,4 +104,4 @@ jobs:
           token: ${{ secrets.GH_TOKEN }}
           body: |
             The kernel can be used to compile Armbian and OpenWrt.
-            The kernel source code comes from: ${{ github.event.inputs.kernel_repo }}
+            The kernel source code comes from: ${{ inputs.kernel_source }}
